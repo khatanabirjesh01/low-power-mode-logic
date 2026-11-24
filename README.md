@@ -26,10 +26,11 @@ If you choose "Only on Battery", your MacBook runs in low performance mode even 
   - Memory footprint: **~15 MB RAM**.
   - CPU usage: **0.0% idle**. Listens directly to IOKit power runloop notifications instead of busy polling.
   - Battery impact: Negligible (0.00%).
-- **🍃 Menu Bar Resident**:
-  - Lives discreetly in your menu bar (`LSUIElement = true`), leaving your Dock clean.
-  - Dynamic battery icon showing live charge, charging status, and a leaf icon 🍃 / amber indicator when Low Power Mode is active.
-  - Optional menu bar percentage readout (e.g., `24% 🍃`).
+- **🔋 Native iOS-Style Status Bar Battery**:
+  - Exact Apple iOS status bar battery geometry, styling, and colors.
+  - Seamlessly turns **solid iOS yellow** (`#FFD60A`) when Low Power Mode is active.
+  - Clean charging bolt glyph and green fill (`#34C759`) when plugged in.
+  - Optional menu bar percentage readout matching macOS system typography.
 - **🎯 Customizable Activation Threshold**:
   - Smooth slider (5% – 80%) with quick presets (10%, 15%, 20%, 25%, 30%, 40%, 50%).
 - **🔄 Smart Recovery & Hysteresis**:

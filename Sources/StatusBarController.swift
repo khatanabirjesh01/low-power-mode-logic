@@ -67,92 +67,127 @@ final class StatusBarController {
         let battery = batteryManager.currentInfo
         let isLPM = powerController.isLowPowerModeActive
         
-        // Render custom crisp menu bar icon
-        button.image = createMenuBarIcon(percentage: battery.percentage, isCharging: battery.isCharging, isLowPower: isLPM)
-        button.imagePosition = .imageLeft
-        
-        if config.showPercentageInMenuBar {
-            let lpmIndicator = isLPM ? " 🍃" : ""
-            button.title = " \(battery.percentage)%\(lpmIndicator)"
-        } else {
-            button.title = isLPM ? " 🍃" : ""
-        }
+        // Render authentic iOS / macOS Sequoia battery pill with percentage inside
+        button.image = createMenuBarIcon(
+            percentage: battery.percentage,
+            isCharging: battery.isCharging,
+            isLowPower: isLPM,
+            showPercentage: config.showPercentageInMenuBar
+        )
+        button.imagePosition = .imageOnly
+        button.title = ""
     }
     
-    private func createMenuBarIcon(percentage: Int, isCharging: Bool, isLowPower: Bool) -> NSImage {
-        let size = NSSize(width: 26, height: 16)
-        let img = NSImage(size: size)
-        img.lockFocus()
+    private func createMenuBarIcon(percentage: Int, isCharging: Bool, isLowPower: Bool, showPercentage: Bool) -> NSImage {
+        let width: CGFloat = 27.5
+        let height: CGFloat = 12.0
         
-        // Battery Shell
-        let shellRect = NSRect(x: 1, y: 2, width: 20, height: 12)
-        let shellPath = NSBezierPath(roundedRect: shellRect, xRadius: 2.5, yRadius: 2.5)
-        
-        // Color choice: If LPM is active, amber/orange; if low battery (<20%), red; otherwise template/white
-        let strokeColor: NSColor
-        if isLowPower {
-            strokeColor = NSColor.systemYellow
-        } else if percentage <= 20 && !isCharging {
-            strokeColor = NSColor.systemRed
-        } else {
-            strokeColor = NSColor.labelColor
-        }
-        
-        strokeColor.setStroke()
-        shellPath.lineWidth = 1.2
-        shellPath.stroke()
-        
-        // Terminal Cap (positive pin on the right)
-        let capRect = NSRect(x: 21.5, y: 5.5, width: 2, height: 5)
-        let capPath = NSBezierPath(roundedRect: capRect, xRadius: 0.8, yRadius: 0.8)
-        strokeColor.setFill()
-        capPath.fill()
-        
-        // Battery Fill Level
-        let maxFillWidth: CGFloat = 16.0
-        let fillWidth = max(2.0, maxFillWidth * CGFloat(min(max(percentage, 5), 100)) / 100.0)
-        let fillRect = NSRect(x: 3, y: 4, width: fillWidth, height: 8)
-        let fillPath = NSBezierPath(roundedRect: fillRect, xRadius: 1.5, yRadius: 1.5)
-        
-        if isLowPower {
-            NSColor.systemYellow.setFill()
-            fillPath.fill()
-        } else if percentage <= 20 && !isCharging {
-            NSColor.systemRed.setFill()
-            fillPath.fill()
-        } else if isCharging {
-            NSColor.systemGreen.setFill()
-            fillPath.fill()
-        } else {
-            NSColor.labelColor.setFill()
-            fillPath.fill()
-        }
-        
-        // Bolt glyph when charging
-        if isCharging {
-            let boltPath = NSBezierPath()
-            let cx: CGFloat = 11.0
-            let cy: CGFloat = 8.0
-            boltPath.move(to: NSPoint(x: cx + 1.5, y: cy + 4.5))
-            boltPath.line(to: NSPoint(x: cx - 2.5, y: cy))
-            boltPath.line(to: NSPoint(x: cx, y: cy))
-            boltPath.line(to: NSPoint(x: cx - 1.5, y: cy - 4.5))
-            boltPath.line(to: NSPoint(x: cx + 2.5, y: cy))
-            boltPath.line(to: NSPoint(x: cx, y: cy))
-            boltPath.close()
+        let img = NSImage(size: NSSize(width: width, height: height), flipped: false) { rect in
+            guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
+            ctx.setAllowsAntialiasing(true)
+            ctx.setShouldAntialias(true)
             
-            NSColor.white.setFill()
-            boltPath.fill()
+            // 1. Pill Dimensions (24.0 x 12.0 pt, radius 4.2 pt - matches native menu bar battery)
+            let pillWidth: CGFloat = 24.0
+            let pillHeight: CGFloat = 12.0
+            let pillY: CGFloat = (height - pillHeight) / 2.0
+            let pillRect = NSRect(x: 0, y: pillY, width: pillWidth, height: pillHeight)
+            let pillPath = NSBezierPath(roundedRect: pillRect, xRadius: 4.2, yRadius: 4.2)
+            
+            // Gray background color of unfilled battery pill
+            let emptyColor = NSColor(srgbRed: 0.44, green: 0.44, blue: 0.47, alpha: 0.80)
+            emptyColor.setFill()
+            pillPath.fill()
+            
+            // 2. Terminal Cap (Right pin)
+            let capWidth: CGFloat = 1.8
+            let capHeight: CGFloat = 4.5
+            let capX: CGFloat = pillWidth + 0.6
+            let capY: CGFloat = (height - capHeight) / 2.0
+            let capRect = NSRect(x: capX, y: capY, width: capWidth, height: capHeight)
+            let capPath = NSBezierPath(roundedRect: capRect, xRadius: 0.9, yRadius: 0.9)
+            emptyColor.setFill()
+            capPath.fill()
+            
+            // 3. Fill Charged Level
+            let clampedPct = CGFloat(min(max(percentage, 0), 100))
+            let fillWidth = pillWidth * (clampedPct / 100.0)
+            
+            if fillWidth > 0 {
+                NSGraphicsContext.saveGraphicsState()
+                pillPath.addClip()
+                
+                let fillRect = NSRect(x: 0, y: pillY, width: fillWidth, height: pillHeight)
+                let fillColor: NSColor
+                if isLowPower {
+                    // Exact Apple iOS Low Power Mode Yellow: #FFD50B
+                    fillColor = NSColor(srgbRed: 255/255.0, green: 213/255.0, blue: 11/255.0, alpha: 1.0)
+                } else if isCharging {
+                    // Exact Apple iOS Charging Green: #34C759
+                    fillColor = NSColor(srgbRed: 52/255.0, green: 199/255.0, blue: 89/255.0, alpha: 1.0)
+                } else if percentage <= 20 {
+                    // Exact Apple iOS Low Battery Red: #FF3B30
+                    fillColor = NSColor(srgbRed: 255/255.0, green: 59/255.0, blue: 48/255.0, alpha: 1.0)
+                } else {
+                    // Normal discharging: solid white fill
+                    fillColor = NSColor.white
+                }
+                
+                fillColor.setFill()
+                fillRect.fill()
+                
+                NSGraphicsContext.restoreGraphicsState()
+            }
+            
+            // 4. Percentage Digits (Centered directly inside the battery pill)
+            if showPercentage {
+                let text = "\(percentage)"
+                let fontSize: CGFloat = (percentage >= 100) ? 8.5 : 10.0
+                let font = NSFont.systemFont(ofSize: fontSize, weight: .semibold)
+                
+                let textColor: NSColor
+                if percentage <= 20 && !isLowPower && !isCharging {
+                    textColor = NSColor.white
+                } else {
+                    textColor = NSColor(srgbRed: 0.12, green: 0.12, blue: 0.13, alpha: 1.0)
+                }
+                
+                let attrs: [NSAttributedString.Key: Any] = [
+                    .font: font,
+                    .foregroundColor: textColor
+                ]
+                
+                let str = NSAttributedString(string: text, attributes: attrs)
+                let strSize = str.size()
+                
+                if isCharging {
+                    let bolt = NSBezierPath()
+                    let bx: CGFloat = 3.5
+                    let by: CGFloat = height / 2.0
+                    bolt.move(to: NSPoint(x: bx + 1.0, y: by + 3.2))
+                    bolt.line(to: NSPoint(x: bx - 1.6, y: by + 0.2))
+                    bolt.line(to: NSPoint(x: bx - 0.2, y: by + 0.2))
+                    bolt.line(to: NSPoint(x: bx - 1.0, y: by - 3.2))
+                    bolt.line(to: NSPoint(x: bx + 1.6, y: by - 0.2))
+                    bolt.line(to: NSPoint(x: bx + 0.2, y: by - 0.2))
+                    bolt.close()
+                    textColor.setFill()
+                    bolt.fill()
+                    
+                    let textX = 7.0 + ((pillWidth - 8.0 - strSize.width) / 2.0)
+                    let textY = (height - strSize.height) / 2.0
+                    str.draw(at: NSPoint(x: textX, y: textY))
+                } else {
+                    let textX = (pillWidth - strSize.width) / 2.0
+                    let textY = (height - strSize.height) / 2.0
+                    str.draw(at: NSPoint(x: textX, y: textY))
+                }
+            }
+            
+            return true
         }
         
-        img.unlockFocus()
-        // If normal mode and not low battery, use template image so macOS adapts to light/dark mode
-        if !isLowPower && percentage > 20 && !isCharging {
-            img.isTemplate = true
-        } else {
-            img.isTemplate = false
-        }
-        
+        img.isTemplate = false
         return img
     }
     
@@ -167,28 +202,28 @@ final class StatusBarController {
         // --- 1. Header Information ---
         let statusTitle: String
         if battery.isCharging {
-            statusTitle = "⚡️ Battery: \(battery.percentage)% (Charging)"
+            statusTitle = "Battery: \(battery.percentage)% (Charging)"
         } else if battery.isPluggedIn {
-            statusTitle = "🔌 Battery: \(battery.percentage)% (Power Adapter)"
+            statusTitle = "Battery: \(battery.percentage)% (Power Adapter)"
         } else {
-            statusTitle = "🔋 Battery: \(battery.percentage)% (Discharging)"
+            statusTitle = "Battery: \(battery.percentage)% (Discharging)"
         }
         let batteryItem = NSMenuItem(title: statusTitle, action: nil, keyEquivalent: "")
         batteryItem.isEnabled = false
         menu.addItem(batteryItem)
         
         if let timeRem = battery.timeRemainingFormatted {
-            let timeItem = NSMenuItem(title: "    ⏱ \(timeRem)", action: nil, keyEquivalent: "")
+            let timeItem = NSMenuItem(title: "    \(timeRem)", action: nil, keyEquivalent: "")
             timeItem.isEnabled = false
             menu.addItem(timeItem)
         }
         
-        let lpmTitle = isLPM ? "🍃 Low Power Mode: Active" : "⚡️ Low Power Mode: Inactive"
+        let lpmTitle = isLPM ? "Low Power Mode: On" : "Low Power Mode: Off"
         let lpmItem = NSMenuItem(title: lpmTitle, action: nil, keyEquivalent: "")
         lpmItem.isEnabled = false
         menu.addItem(lpmItem)
         
-        let thresholdDesc = "🎯 Auto-triggers at ≤ \(threshold)%"
+        let thresholdDesc = "Auto-triggers at ≤ \(threshold)%"
         let thresholdItem = NSMenuItem(title: thresholdDesc, action: nil, keyEquivalent: "")
         thresholdItem.isEnabled = false
         menu.addItem(thresholdItem)

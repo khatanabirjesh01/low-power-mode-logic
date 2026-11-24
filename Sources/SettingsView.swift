@@ -262,7 +262,7 @@ struct SettingsView: View {
                     get: { config.showPercentageInMenuBar },
                     set: { config.showPercentageInMenuBar = $0 }
                 ))
-                Text("Displays current percentage and a leaf icon 🍃 when Low Power Mode is active.")
+                Text("Displays current percentage next to the battery icon.")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
